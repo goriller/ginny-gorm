@@ -1,10 +1,7 @@
 package orm
 
 import (
-	"net/url"
-
 	"github.com/google/wire"
-	"github.com/goriller/ginny-gorm/dialector"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -16,7 +13,9 @@ var ConfigProvider = wire.NewSet(NewConfig)
 
 // Config
 type Config struct {
-	Dsn string
+	// [user[:password]@][net[(addr)]]/dbname[?param1=value1&paramN=valueN]
+	WDB  string   `json:"wdb" mapstructure:"wdb"`
+	RDBs []string `json:"rdbs" mapstructure:"rdbs"`
 	gorm.Config
 	dialector gorm.Dialector
 }
@@ -28,33 +27,13 @@ func NewConfig(v *viper.Viper, logger *zap.Logger) (*Config, error) {
 	if err = v.UnmarshalKey("gorm", o); err != nil {
 		return nil, errors.Wrap(err, "unmarshal gorm option error")
 	}
-
+	o.QueryFields = true
 	o.Logger = newLogger(logger)
 
-	u, err := url.Parse(o.Dsn)
-	if err != nil {
-		return nil, errors.Wrap(err, "faild parse dsn")
+	if o.RDBs == nil || len(o.RDBs) == 0 {
+		o.RDBs = []string{
+			o.WDB,
+		}
 	}
-	switch u.Scheme {
-	case "sqllite":
-		o.dialector = dialector.NewSqllite(u)
-		break
-	case "mysql":
-		o.dialector = dialector.NewMysql(u)
-		break
-	case "postgres":
-	case "postgresql":
-		o.dialector = dialector.NewPostgres(u)
-		break
-	case "sqlserver":
-		o.dialector = dialector.NewSqlserver(u)
-		break
-	case "clickhouse":
-		o.dialector = dialector.NewClickhouse(u)
-		break
-	default:
-		return nil, errors.Wrap(err, "not support")
-	}
-
 	return o, nil
 }
