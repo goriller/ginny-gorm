@@ -4,7 +4,7 @@ import (
 	"net/url"
 
 	"github.com/google/wire"
-	"github.com/goriller/ginny-gorm.git/dialector"
+	"github.com/goriller/ginny-gorm/dialector"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
