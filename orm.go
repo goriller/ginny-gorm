@@ -57,7 +57,7 @@ func newDB(ctx context.Context, dsn string, conf *Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "faild parse dsn")
 	}
-	switch u.Scheme {
+	switch conf.Type {
 	case "sqllite":
 		conf.dialector = dialector.NewSqllite(u)
 		break

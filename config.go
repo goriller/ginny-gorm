@@ -13,6 +13,7 @@ var ConfigProvider = wire.NewSet(NewConfig)
 
 // Config
 type Config struct {
+	Type string `json:"type" mapstructure:"type"`
 	// [user[:password]@][net[(addr)]]/dbname[?param1=value1&paramN=valueN]
 	WDB  string   `json:"wdb" mapstructure:"wdb"`
 	RDBs []string `json:"rdbs" mapstructure:"rdbs"`
