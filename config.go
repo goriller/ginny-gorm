@@ -75,6 +75,10 @@ func (c *Config) parseUrl(dsn string) (string, error) {
 	q.Del("username")
 	q.Del("password")
 
+	if c.Type == "" {
+		c.Type = u.Scheme
+	}
+
 	// [user[:password]@][net[(addr)]]/dbname[?param1=value1&paramN=valueN]
 	return fmt.Sprintf("%s:%s@tcp(%s)/%s?%s", wdbUser, wdbPass, u.Host, strings.TrimPrefix(u.Path, "/"), q.Encode()), nil
 }
