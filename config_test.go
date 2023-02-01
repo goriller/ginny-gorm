@@ -20,7 +20,8 @@ func Test_ParseUrl(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			u, err := parseUrl(tt.dsn)
+			c := &Config{}
+			u, err := c.parseUrl(tt.dsn)
 			assert.NoError(t, err)
 			fmt.Printf("%s\n", u)
 		})

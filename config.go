@@ -42,14 +42,14 @@ func NewConfig(v *viper.Viper, logger *zap.Logger) (*Config, error) {
 	}
 
 	// parse dsn
-	o.WDB, err = parseUrl(o.WDB)
+	o.WDB, err = o.parseUrl(o.WDB)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse dsn error")
 	}
 
 	rdb := []string{}
 	for _, v := range o.RDBs {
-		u, err := parseUrl(v)
+		u, err := o.parseUrl(v)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse dsn error")
 		}
@@ -60,7 +60,7 @@ func NewConfig(v *viper.Viper, logger *zap.Logger) (*Config, error) {
 	return o, nil
 }
 
-func parseUrl(dsn string) (string, error) {
+func (c *Config) parseUrl(dsn string) (string, error) {
 	if dsn == "" {
 		return "", fmt.Errorf("undefined wdb dsn")
 	}
