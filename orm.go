@@ -3,52 +3,57 @@ package orm
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/url"
+	"time"
 
 	"github.com/google/wire"
 	"github.com/goriller/ginny-gorm/dialector"
 	"github.com/goriller/ginny-util/graceful"
+	"github.com/goriller/gorm-plus/gplus"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/plugin/dbresolver"
 )
 
-var Provider = wire.NewSet(ConfigProvider, New)
-
-type ORM struct {
-	writeDB *gorm.DB
-	readDBs []*gorm.DB
-	logger  *zap.Logger
-}
+var Provider = wire.NewSet(NewConfig, New)
 
 // New
-func New(ctx context.Context, conf *Config, logger *zap.Logger) (*ORM, error) {
-	writeDB, err := newDB(ctx, conf.WDB, conf)
+func New(ctx context.Context, conf *Config) (*gorm.DB, error) {
+	mdb, err := newDB(ctx, conf.Master, conf)
 	if err != nil {
 		return nil, err
 	}
 	// RDB多个
-	rDBLen := len(conf.RDBs)
-	readDBs := make([]*gorm.DB, 0, rDBLen)
+	rDBLen := len(conf.Replicas)
+	replicas := []gorm.Dialector{}
 	for i := 0; i < rDBLen; i++ {
-		readDB, err := newDB(ctx, conf.RDBs[i], conf)
+		readDB, err := newDB(ctx, conf.Replicas[i], conf)
 		if err != nil {
 			return nil, err
 		}
-		readDBs = append(readDBs, readDB)
+		replicas = append(replicas, readDB.Dialector)
 	}
-	db := &ORM{
-		writeDB: writeDB,
-		readDBs: readDBs,
-		logger:  logger,
-	}
-	// graceful
-	graceful.AddCloser(func(ctx context.Context) error {
-		return db.Close()
-	})
 
-	return db, nil
+	err = mdb.Use(
+		dbresolver.Register(dbresolver.Config{
+			Sources:  []gorm.Dialector{mdb.Dialector},
+			Replicas: replicas,
+			// sources/replicas load balancing policy
+			Policy: dbresolver.RandomPolicy{},
+			// print sources/replicas mode in logger
+			TraceResolverMode: true,
+		}).SetConnMaxIdleTime(time.Hour).
+			SetConnMaxLifetime(24 * time.Hour).
+			SetMaxIdleConns(100).
+			SetMaxOpenConns(200),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	gplus.Init(mdb)
+
+	return mdb, nil
 }
 
 // newDB
@@ -78,41 +83,18 @@ func newDB(ctx context.Context, dsn string, conf *Config) (*gorm.DB, error) {
 		return nil, errors.Wrap(err, "not support")
 	}
 	db, err := gorm.Open(conf.dialector, conf)
+
+	// graceful
+	graceful.AddCloser(func(ctx context.Context) error {
+		dbInstance, err := db.DB()
+		if err != nil {
+			return err
+		}
+		return dbInstance.Close()
+	})
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect database")
 	}
 	return db, nil
-}
-
-// RDB 随机返回一个读库
-func (m *ORM) RDB() *gorm.DB {
-	return m.readDBs[rand.Intn(len(m.readDBs))]
-}
-
-// WDB 返回唯一写库
-func (m *ORM) WDB() *gorm.DB {
-	return m.writeDB
-}
-
-// Close 关闭所有读写连接池，停止keepalive保活协程。该函数应当很少使用到
-func (m *ORM) Close() error {
-	db, err := m.writeDB.DB()
-	if err != nil {
-		return err
-	}
-	if err := db.Close(); err != nil {
-		m.logger.Error("close write db error", zap.Error(err))
-		return err
-	}
-	for i := 0; i < len(m.readDBs); i++ {
-		rdb, err := m.readDBs[i].DB()
-		if err != nil {
-			return err
-		}
-		if err := rdb.Close(); err != nil {
-			m.logger.Error("close db read pool error", zap.Error(err))
-			return err
-		}
-	}
-	return nil
 }

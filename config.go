@@ -5,22 +5,18 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/google/wire"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
-// ConfigProvider
-var ConfigProvider = wire.NewSet(NewConfig)
-
 // Config
 type Config struct {
 	Type string `json:"type" mapstructure:"type"`
 	// mysql://localhost:3306/dbname[?username=value1&password=value2&paramN=valueN]
-	WDB  string   `json:"wdb" mapstructure:"wdb"`
-	RDBs []string `json:"rdbs" mapstructure:"rdbs"`
+	Master   string   `json:"master" mapstructure:"master"`
+	Replicas []string `json:"replicas" mapstructure:"replicas"`
 	gorm.Config
 	dialector gorm.Dialector
 }
@@ -35,27 +31,27 @@ func NewConfig(v *viper.Viper, logger *zap.Logger) (*Config, error) {
 	o.QueryFields = true
 	o.Logger = newLogger(logger)
 
-	if o.RDBs == nil || len(o.RDBs) == 0 {
-		o.RDBs = []string{
-			o.WDB,
+	if o.Replicas == nil || len(o.Replicas) == 0 {
+		o.Replicas = []string{
+			o.Master,
 		}
 	}
 
 	// parse dsn
-	o.WDB, err = o.parseUrl(o.WDB)
+	o.Master, err = o.parseUrl(o.Master)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse dsn error")
 	}
 
 	rdb := []string{}
-	for _, v := range o.RDBs {
+	for _, v := range o.Replicas {
 		u, err := o.parseUrl(v)
 		if err != nil {
 			return nil, errors.Wrap(err, "parse dsn error")
 		}
 		rdb = append(rdb, u)
 	}
-	o.RDBs = rdb
+	o.Replicas = rdb
 
 	return o, nil
 }
